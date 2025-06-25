@@ -16,11 +16,11 @@ We use the [HEST-1k](https://github.com/mahmoodlab/HEST) ST library for the eval
 1. Obtain access to the hugging face repo [here](https://huggingface.co/datasets/MahmoodLab/hest).
 2. Create and copy your token [here](https://huggingface.co/settings/tokens).
 3. Create a `.token.env` file *parallel* to this repo, with a singular line that reads `API_TOKEN=YOURTOKEN`.
-4. Run the below command, member={akshaya, harry, tanvi}
+4. Run the below command, member={akshaya, harry, tanvi}, note the data should be between 100GB~200GB per person
 ```
 cd SQUIDp
 python data/hest1k_download.py \
     --hgf_token_path PATH_TO_HGF_TOKEN_FILE \
-    --hest_data_dir PATH_TO_HEST \
-    --member harry
+    --hest_data_dir PATH_TO_YOUR_DESIRED_DIRECTORY \
+    --member YOUR_NAME
 ```
