@@ -5,7 +5,7 @@ import datasets
 import argparse
 from dotenv import load_dotenv
 from huggingface_hub import login
-from squid_p.util import auto_expand
+from SQUIDp.util import auto_expand
 
 def main():
     parser = argparse.ArgumentParser(description="Download subset of HEST 1k")

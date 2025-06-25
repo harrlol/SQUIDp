@@ -1,0 +1,7 @@
+LICENSE
+README.md
+setup.py
+src/squidp.egg-info/PKG-INFO
+src/squidp.egg-info/SOURCES.txt
+src/squidp.egg-info/dependency_links.txt
+src/squidp.egg-info/top_level.txt
