@@ -1,0 +1,7 @@
+LICENSE
+README.md
+setup.py
+src/squid_p.egg-info/PKG-INFO
+src/squid_p.egg-info/SOURCES.txt
+src/squid_p.egg-info/dependency_links.txt
+src/squid_p.egg-info/top_level.txt
