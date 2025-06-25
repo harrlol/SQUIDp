@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
+
+# packaging
+*.egg-info/
+dist/
+build/
+
+# jupyter cache
+.ipynb_checkpoints/
+
+# venvs
+.venv/
+env/
+
+.vscode/
+
+
+# logs
+*.txt
+*.png
+*.pth
