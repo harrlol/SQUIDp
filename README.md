@@ -1,5 +1,5 @@
 # SQUID:p (Spatial Quantification of Uniquely-Inferred Disease Pathways)
-BroadHacks Project, Zero-shot evaluation of Pathology FM at expression prediction task
+[BroadHacks](https://sites.google.com/broadinstitute.org/coderats/broadhacks/broadhacks-2025) Project, Zero-shot evaluation of Pathology FM at expression prediction task
 
 # Install
 Set up with the following commands:
