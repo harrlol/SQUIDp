@@ -1,4 +1,4 @@
-# SQUID-p
+# SQUID:p (Spatial Quantification of Uniquely-Inferred Disease Pathways)
 BroadHacks Project, Zero-shot evaluation of Pathology FM at expression prediction task
 
 # Install
