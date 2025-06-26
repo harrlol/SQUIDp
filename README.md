@@ -3,7 +3,7 @@
 
 # Install
 Set up with the following commands:
-```
+``` 
 cd SQUIDp
 conda env create -f environment.yml
 conda activate squidp
