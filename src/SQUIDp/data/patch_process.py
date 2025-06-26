@@ -1,5 +1,6 @@
 ## goal: modify such that it patches 224x224 pixel, and obtain average expression for that patch
 import torch
+import SQUIDp.util as sqd
 import numpy as np
 import os
 import os.path as osp
@@ -8,10 +9,12 @@ from skimage.measure import regionprops
 from PIL import Image
 from torch.utils.data import Dataset
 import random
+from hest import iter_hest
 import matplotlib.pyplot as plt
 import datetime
 import pickle
 import warnings
+import pandas as pd
 warnings.filterwarnings("ignore", category=UserWarning, module="zarr.creation")
 
 # edited to match hest format 6/26
@@ -51,8 +54,8 @@ def get_cell_ids_in_patch(sdata, patch_size=224, log_file=None):
     # collect stats
     if log_file is not None:
         with open(log_file, 'a') as f:
-            f.write(f"HE Nucleus Mask of dimension: {he_nuc_mask.shape}\n")
-            f.write(f"Number of cells in this slide: {len(regions)}\n")
+            # f.write(f"HE Nucleus Mask of dimension: {he_nuc_mask.shape}\n")
+            f.write(f"Number of cells in this slide: {len(sdata['locations']['geometry'])}\n")
             f.write(f"Number of patches: {len(patch_id_to_cell_id)}\n")
             f.write(f"Patch size: {patch_size}\n")
             if cell_counts:
@@ -122,7 +125,8 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
     expr_data = sdata['table']
 
     patch_id_to_expr = dict()
-    patch_id_to_delete = []
+    patch_id_to_delete_from_cid = []
+    patch_id_to_delete_from_pil = []
     for patch_key, cell_ids in patch_id_to_cell_id.items():
 
         # get a subset of expression data of shape (n_cells_in_this_patch, 460)
@@ -131,7 +135,13 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
         # if subset is empty, this patch contains no cells that we can use for train
         # add this patch id to the list of patches to delete
         if subset.shape[0] == 0:
-            patch_id_to_delete.append(patch_key)
+            patch_id_to_delete_from_cid.append(patch_key)
+            patch_id_to_delete_from_pil.append(patch_key)
+            continue
+
+        # also, cases where boundary patches got omitted for the PIL step
+        if patch_key not in patch_id_to_pil:
+            patch_id_to_delete_from_cid.append(patch_key)
             continue
 
         # get average expression vector
@@ -141,8 +151,10 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
         patch_id_to_expr[patch_key] = avg_expr
 
     # process previous dicts to remove empty patches
-    for patch_key in patch_id_to_delete:
+    for patch_key in patch_id_to_delete_from_cid:
         del patch_id_to_cell_id[patch_key]
+    
+    for patch_key in patch_id_to_delete_from_pil:
         del patch_id_to_pil[patch_key]
     
     # collect stats
@@ -150,7 +162,8 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
         with open(log_file, 'a') as f:
             f.write(f"Max average expression: {max([np.mean(expr) for expr in patch_id_to_expr.values()])}\n")
             f.write(f"Min average expression: {min([np.mean(expr) for expr in patch_id_to_expr.values()])}\n")
-            f.write(f"Deleted {len(patch_id_to_delete)} patches with no cells containing expression information\n")
+            f.write(f"Deleted {len(patch_id_to_delete_from_pil)} patches with no cells containing expression information\n")
+            f.write(f"Deleted {len(patch_id_to_delete_from_cid)} patches that ran out of WSI boundaries\n")
             f.write(f"Number of remaining patches (which has valid expression data): {len(patch_id_to_expr)}\n")
             filter_only_1_patch_id = {key: value for key, value in patch_id_to_cell_id.items() if len(value) == 10}
             f.write(f"Number of patches with at least 10 cells: {len(filter_only_1_patch_id)}\n")
@@ -162,7 +175,7 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
     return patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr
 
 # makes plots and visualizations
-def plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, plot_dir):
+def plots_n_visualizations(sdata, id, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, plot_dir):
     '''
     Input:
     sdata: spatialdata object
@@ -176,7 +189,7 @@ def plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id
     Output:
     None
     '''
-    file_name = sdata.path.name
+    file_name = id
 
     # fig1 check distribution of cell counts
     cell_counts = [len(cell_ids) for cell_ids in patch_id_to_cell_id.values()]
@@ -227,7 +240,8 @@ def plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id
 
     # fig3 check distribution of expression and plots
     # for patch with at least 10 cells (arbitrary threshold)
-    filter_10_patch_id = list({key: value for key, value in patch_id_to_cell_id.items() if len(value) >= 10}.keys())
+    # edited to accomodate for hest data, 1 for now 6/26
+    filter_10_patch_id = list({key: value for key, value in patch_id_to_cell_id.items() if len(value) >= 1}.keys())
     filtered_patch_id_to_cell_id = {k: patch_id_to_cell_id[k] for k in filter_10_patch_id}
     filtered_patch_id_to_pil = {k: patch_id_to_pil[k] for k in filter_10_patch_id}
     filtered_patch_id_to_expr = {k: patch_id_to_expr[k] for k in filter_10_patch_id}
@@ -236,7 +250,7 @@ def plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id
     # plot distribution of expression of the 460 genes for a random patch (expect right skew)
     # for all patch
     # plot the average of the expression vector across all patches (expect normal)
-    file_name = sdata.path.name
+    file_name = id
     max_avg_patch_id = list(filtered_patch_id_to_cell_id.keys())[np.argmax([np.mean(expr) for expr in filtered_patch_id_to_expr.values()])]
     max_avg_patch = filtered_patch_id_to_expr[max_avg_patch_id]
     max_sd_patch_id = list(filtered_patch_id_to_cell_id.keys())[np.argmax([np.std(expr) for expr in filtered_patch_id_to_expr.values()])]
@@ -271,7 +285,7 @@ def plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id
     return
 
 # save the patches and their expression data
-def save_patches(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, output_dir):
+def save_patches(sdata, id, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, output_dir):
     '''
     Input:
     sdata: spatialdata object
@@ -287,9 +301,7 @@ def save_patches(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, 
     os.makedirs(output_dir, exist_ok=True)
 
     # save
-    file_name = sdata.path.name
-    # drop ".zarr"
-    file_name = file_name.split('.')[0]
+    file_name = id
     
     data = []
     for patch_id in sorted(patch_id_to_cell_id.keys()):
@@ -306,39 +318,37 @@ def save_patches(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, 
 
 # runs this script for all data at hand
 def main():
-    DATA_PATH = osp.expanduser('~/hl/ac109_project/raw')
-    zarr_dirs = [osp.join(DATA_PATH, d) for d in os.listdir(DATA_PATH) if d.endswith('.zarr')]
-    # take out DC1
-    zarr_dirs = [d for d in zarr_dirs if 'DC1' not in d]
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"log_{timestamp}.txt"
-    output_dir = "processed"
-    plot_dir = "plots"
+    output_dir = osp.expanduser('~/workspace/broadhacks_work')
+    plot_dir = osp.expanduser('~/workspace/broadhacks_work/plots')
+    log_file = osp.join(output_dir, f"log_{timestamp}.txt")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(plot_dir, exist_ok=True)
     with open(log_file, 'a') as f:
         f.write(f"Log file created at {timestamp}\n")
-        f.write(f"Processing {len(zarr_dirs)} zarr directories\n")
         f.write(f"Output directory: {output_dir}\n")
         f.write(f"Plot directory: {plot_dir}\n")
         f.write("\n")
 
-    patch_size = 224
+    patch_size = 1048
 
-    for zarr_path in zarr_dirs:
-        full_path = osp.join(zarr_path, zarr_path.split('/')[-1])
-        with open(log_file, 'a') as f:
-            f.write(f"Processing {full_path}\n")
-        sdata = sd.read_zarr(full_path, )
+    hest_data_dir = "~/workspace/hest_data"
+    meta_df = pd.read_csv("hf://datasets/MahmoodLab/hest/HEST_v1_1_0.csv")
+    tissue_list = ["Heart", "Brain", "Lung"]
+    id_list = sqd.get_ids(meta_df, tissue_list)
+    for st in iter_hest(osp.expanduser(hest_data_dir), id_list=id_list, load_transcripts=True):
+        id = st.meta['id']
+        sdata = st.to_spatial_data()
+        wsi = st.wsi
         
         patch_id_to_cell_id = get_cell_ids_in_patch(sdata, patch_size=patch_size, log_file=log_file)
-        patch_id_to_pil = match_patch_id_to_PIL(sdata, patch_id_to_cell_id, patch_size=patch_size, log_file=log_file)
+        patch_id_to_pil = match_patch_id_to_PIL(sdata, wsi, patch_id_to_cell_id, patch_size=patch_size, log_file=log_file)
         patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr = match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file=log_file)
-        plots_n_visualizations(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, plot_dir=plot_dir)
-        save_patches(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, output_dir=output_dir)
+        plots_n_visualizations(sdata, id, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, plot_dir=plot_dir)
+        save_patches(sdata, id, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, output_dir=output_dir)
 
         with open(log_file, 'a') as f:
-            f.write(f"Finished processing {full_path}\n")
+            f.write(f"Finished processing {id}\n")
             f.write("\n")
 
 if __name__ == "__main__":

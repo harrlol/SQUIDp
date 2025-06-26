@@ -11,7 +11,6 @@ def main():
     parser = argparse.ArgumentParser(description="Download subset of HEST 1k")
     parser.add_argument('--hgf_token_path', type=str, required=True, help="Path to your huggingface token file")
     parser.add_argument('--hest_data_dir', type=str, default='~/hest_data', help="Directory to save the downloaded dataset")
-    parser.add_argument('--member', type=str, required=True, help="Member name for the dataset")
     args = parser.parse_args()
 
     load_dotenv(dotenv_path=auto_expand(args.hgf_token_path))
@@ -26,15 +25,9 @@ def main():
     meta_df = meta_df[meta_df['st_technology'] == 'Xenium']
 
     # get tissue subsets
-    member = args.member
-    if member == "akshaya":
-        tissues = ["Pancreas", "Colon", "Liver", "Kidney", "Bowel"]
-    elif member == "harry":
-        tissues = ["Heart", "Brain", "Lung"]
-    elif member == "tanvi":
-        tissues = ["Breast", "Skin", "Bone marrow", "Tonsil", "Prostate", "Lymph node", "Ovary", "Femur bone"]
-    else:
-        raise Exception("Team member not recognized")
+    tissues = ["Pancreas", "Colon", "Liver", "Kidney", "Bowel", 
+                   "Heart", "Brain", "Breast", "Skin", "Bone marrow", "Tonsil", 
+                   "Prostate", "Lymph node", "Ovary", "Femur bone"]
 
     meta_df = meta_df[meta_df['tissue'].isin(tissues)]
 
@@ -45,8 +38,6 @@ def main():
         cache_dir=local_dir,
         patterns=list_patterns
     )
-
-
 
 if __name__ == "__main__":
     main()

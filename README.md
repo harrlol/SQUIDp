@@ -21,6 +21,5 @@ We use the [HEST-1k](https://github.com/mahmoodlab/HEST) ST library for the eval
 cd SQUIDp
 python data/hest1k_download.py \
     --hgf_token_path PATH_TO_HGF_TOKEN_FILE \
-    --hest_data_dir PATH_TO_YOUR_DESIRED_DIRECTORY \
-    --member YOUR_NAME
+    --hest_data_dir PATH_TO_YOUR_DESIRED_DIRECTORY
 ```
