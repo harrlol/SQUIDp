@@ -23,3 +23,12 @@ python data/hest1k_download.py \
     --hgf_token_path PATH_TO_HGF_TOKEN_FILE \
     --hest_data_dir PATH_TO_YOUR_DESIRED_DIRECTORY
 ```
+
+# Data Processing
+We extract the patches that has at least one cells, and pair each patch with the average expression vector of the cells found in that patch. Simply run the script below. Patch size is default 1024.
+```
+python data/patch_process.py \
+    --hest_data_dir PATH_TO_YOUR_DESIRED_DIRECTORY \
+    --output_dir PATH_TO_YOUR_DESIRED_DIRECTORY \
+    --patch_size 1024
+```

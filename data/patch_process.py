@@ -12,8 +12,10 @@ import random
 from hest import iter_hest
 import matplotlib.pyplot as plt
 import datetime
+from SQUIDp.util import auto_expand
 import pickle
 import warnings
+import argparse
 import pandas as pd
 warnings.filterwarnings("ignore", category=UserWarning, module="zarr.creation")
 
@@ -318,9 +320,20 @@ def save_patches(sdata, id, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_ex
 
 # runs this script for all data at hand
 def main():
+    parser = argparse.ArgumentParser(description="Process downloaded HEST 1k")
+    parser.add_argument('--hest_data_dir', type=str, required=True, help="Directory to downloaded dataset")
+    parser.add_argument('--output_dir', type=str, required=True, help="Directory to save the output patches and logs")
+    parser.add_argument('--patch_size', type=int, default=224, help="Size of the patches to extract")
+
+    # get args
+    args = parser.parse_args()
+    output_dir = auto_expand(args.output_dir)
+    hest_data_dir = auto_expand(args.hest_data_dir)
+    patch_size = args.patch_size
+
+    # create output directories
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = osp.expanduser('~/workspace/broadhacks_work')
-    plot_dir = osp.expanduser('~/workspace/broadhacks_work/plots')
+    plot_dir = osp.join(output_dir, "plots")
     log_file = osp.join(output_dir, f"log_{timestamp}.txt")
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(plot_dir, exist_ok=True)
@@ -329,13 +342,15 @@ def main():
         f.write(f"Output directory: {output_dir}\n")
         f.write(f"Plot directory: {plot_dir}\n")
         f.write("\n")
-
-    patch_size = 1048
-
-    hest_data_dir = "~/workspace/hest_data"
+    
+    # establish the ids to process
     meta_df = pd.read_csv("hf://datasets/MahmoodLab/hest/HEST_v1_1_0.csv")
-    tissue_list = ["Heart", "Brain", "Lung"]
+    tissue_list = ["Pancreas", "Colon", "Liver", "Kidney", "Bowel", 
+                   "Heart", "Brain", "Breast", "Skin", "Bone marrow", "Tonsil", 
+                   "Prostate", "Lymph node", "Ovary", "Femur bone"]
     id_list = sqd.get_ids(meta_df, tissue_list)
+
+    # main loop
     for st in iter_hest(osp.expanduser(hest_data_dir), id_list=id_list, load_transcripts=True):
         id = st.meta['id']
         sdata = st.to_spatial_data()
