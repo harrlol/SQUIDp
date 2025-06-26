@@ -14,6 +14,7 @@ import pickle
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="zarr.creation")
 
+# edited to match hest format 6/26
 # given a patch range, get the cell ids
 def get_cell_ids_in_patch(sdata, patch_size=224, log_file=None):
     '''
@@ -24,17 +25,14 @@ def get_cell_ids_in_patch(sdata, patch_size=224, log_file=None):
     Output:
     patch_id_to_cell_id: a dict that maps each patch id (y_patch_idx, x_patch_idx) to a list of cell ids
     '''
-    he_nuc_mask = sdata['HE_nuc_original'][0, :, :].to_numpy()
-    regions = regionprops(he_nuc_mask)
     
+    patch_id_to_cell_id = dict()
     # initialize a dict to hold cell ids by patch
     # {(y_patch_idx, x_patch_idx): [cell_ids]}
-    patch_id_to_cell_id = dict()
-    for props in regions:
+    for cid, point in sdata['locations']['geometry'].items():
 
         # get id and coord of cell
-        cid = props.label
-        y_center, x_center = int(props.centroid[0]), int(props.centroid[1])
+        x_center, y_center = point.x, point.y
 
         # find y, x index of the bucket this cell should be in
         y_patch_idx = y_center // patch_size
@@ -67,7 +65,7 @@ def get_cell_ids_in_patch(sdata, patch_size=224, log_file=None):
     return patch_id_to_cell_id
 
 # matches each patch id (y_patch_idx, x_patch_idx) to the actual patch
-def match_patch_id_to_PIL(sdata, patch_id_to_cell_id, patch_size=224, log_file=None):
+def match_patch_id_to_PIL(sdata, wsi, patch_id_to_cell_id, patch_size=224, log_file=None):
     '''
     Input:
     patch_id_to_cell_id: a dict that maps each patch id (y_patch_idx, x_patch_idx) to a list of cell ids
@@ -77,10 +75,6 @@ def match_patch_id_to_PIL(sdata, patch_id_to_cell_id, patch_size=224, log_file=N
     Output:
     patch_id_to_pil: a dict that maps each patch id (y_patch_idx, x_patch_idx) to the actual patch
     '''
-    # reshape nparray into (w, h, c) and convert to PIL
-    he_image = np.transpose(sdata['HE_original'].to_numpy(), (1, 2, 0))
-    he_pil = Image.fromarray(he_image.astype(np.uint8))
-
     # initialize a dict to pil image by patch id
     # {(y_patch_idx, x_patch_idx): PIL image}
     patch_id_to_pil = dict()
@@ -88,20 +82,21 @@ def match_patch_id_to_PIL(sdata, patch_id_to_cell_id, patch_size=224, log_file=N
 
         y_patch_idx, x_patch_idx = patch_key
 
-        # define the four corners of the patch
-        x_start = x_patch_idx * patch_size
-        x_end = x_start + patch_size
-        y_start = y_patch_idx * patch_size
-        y_end = y_start + patch_size
+        # define the location of the patch for read_region
+        x_loc = int(x_patch_idx * patch_size)
+        y_loc = int(y_patch_idx * patch_size)
         
         # check if the patch is within the bounds of the image
-        if x_start < 0 or x_end > he_image.shape[1] or y_start < 0 or y_end > he_image.shape[0]:
-            with open(log_file, 'a') as f:
-                f.write(f"Patch ({x_start}, {x_end}, {y_start}, {y_end}) is out of bounds. Skipped. \n")
+        if x_loc < 0 or (x_loc + patch_size) > wsi.width or y_loc < 0 or (y_loc + patch_size) > wsi.height:
+            if log_file is not None:
+                with open(log_file, 'a') as f:
+                    f.write(f"Patch ({x_loc}, {y_loc}) with dimension {patch_size} is out of bounds. Skipped. \n")
             continue
-
+        # print(f"Processing patch {patch_key} at location ({x_loc}, {y_loc}) with size {patch_size}")
+        
         # obtain the patch and store in dict
-        patch_pil = he_pil.crop((x_start, y_start, x_end, y_end))
+        patch_np = wsi.read_region(location=(x_loc, y_loc), level=0, size=(patch_size, patch_size))
+        patch_pil = Image.fromarray(patch_np.astype(np.uint8))
         patch_id_to_pil[patch_key] = patch_pil
 
     # collect stats
@@ -122,17 +117,16 @@ def match_patch_id_to_expr(sdata, patch_id_to_cell_id, patch_id_to_pil, log_file
     patch_id_to_expression: a dict that maps each patch id (y_patch_idx, x_patch_idx) to the average expression
     of cells in that patch, stored as (460,)
     '''
-    file_name = sdata.path.name
 
     # get the expression data
-    expr_data = sdata['anucleus']
+    expr_data = sdata['table']
 
     patch_id_to_expr = dict()
     patch_id_to_delete = []
     for patch_key, cell_ids in patch_id_to_cell_id.items():
 
         # get a subset of expression data of shape (n_cells_in_this_patch, 460)
-        subset = expr_data[expr_data.obs['cell_id'].isin(cell_ids)]
+        subset = expr_data[expr_data.obs['instance_id'].isin(cell_ids)]
 
         # if subset is empty, this patch contains no cells that we can use for train
         # add this patch id to the list of patches to delete
@@ -308,6 +302,7 @@ def save_patches(sdata, patch_id_to_cell_id, patch_id_to_pil, patch_id_to_expr, 
         pickle.dump(data, f)
     
     return
+
 
 # runs this script for all data at hand
 def main():
